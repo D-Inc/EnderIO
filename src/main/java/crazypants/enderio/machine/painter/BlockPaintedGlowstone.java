@@ -53,7 +53,7 @@ public class BlockPaintedGlowstone extends BlockEio implements ITileEntityProvid
   private final Random rand = new Random();
 
   protected BlockPaintedGlowstone() {
-    super(ModObject.blockPaintedGlowstone.unlocalisedName, TileEntityPaintedBlock.class, Material.glass);
+    super(ModObject.blockPaintedGlowstone.unlocalisedName, TileEntityPaintedBlock.class, Material.stone);
     setCreativeTab(null);
     setStepSound(soundTypeGlass);
     setHardness(0.7F);
