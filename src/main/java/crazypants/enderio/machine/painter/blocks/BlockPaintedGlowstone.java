@@ -94,7 +94,7 @@ public abstract class BlockPaintedGlowstone extends BlockGlowstone implements IT
   private final String name;
 
   protected BlockPaintedGlowstone(String name) {
-    super(Material.GLASS);
+    super(Material.redstoneLight);
     this.name = name;
     setHardness(0.3F);
     setSoundType(SoundType.GLASS);
