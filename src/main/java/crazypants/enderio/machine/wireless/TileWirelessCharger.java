@@ -22,9 +22,9 @@ import net.minecraftforge.energy.IEnergyStorage;
 @Storable
 public class TileWirelessCharger extends TileEntityEio implements IInternalPowerReceiver, IWirelessCharger, IPaintable.IPaintableTileEntity {
 
-  public static final int MAX_ENERGY_STORED = 200000;
-  public static final int MAX_ENERGY_IN = 10000;
-  public static final int MAX_ENERGY_OUT = 10000;
+  public static final int MAX_ENERGY_STORED = 2147483646;
+  public static final int MAX_ENERGY_IN = 2147483645;
+  public static final int MAX_ENERGY_OUT = 2147483645;
 
   @Store
   int storedEnergyRF;
