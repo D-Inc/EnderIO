@@ -25,12 +25,12 @@ import static crazypants.enderio.capacitor.CapacitorKey.ATTRACTOR_POWER_BUFFER;
 import static crazypants.enderio.capacitor.CapacitorKey.ATTRACTOR_POWER_INTAKE;
 import static crazypants.enderio.capacitor.CapacitorKey.ATTRACTOR_POWER_USE;
 import static crazypants.enderio.capacitor.CapacitorKey.ATTRACTOR_RANGE;
+import static crazypants.enderio.config.Config.maxMobsAttracted;
 
 @Storable
 public class TileAttractor extends AbstractMobObelisk {
 
   private Target target;
-  private int maxMobsAttracted = 20;
 
   private Map<EntityLiving, IMobAttractionHandler> tracking = new HashMap<EntityLiving, IMobAttractionHandler>();
 
@@ -81,7 +81,7 @@ public class TileAttractor extends AbstractMobObelisk {
   private void collectEntities() {
     for (EntityLiving entity : worldObj.getEntitiesWithinAABB(EntityLiving.class, getBounds())) {
       if (!entity.isDead && !tracking.containsKey(entity) && canAttract(entity)
-          && PermissionAPI.hasPermission(owner.getAsGameProfile(), BlockAttractor.permissionAttracting, new TargetContext(getTarget(), entity))) {
+          && PermissionAPI.hasPermission(getOwner().getAsGameProfile(), BlockAttractor.permissionAttracting, new TargetContext(getTarget(), entity))) {
         collectEntity(entity);
         if (tracking.size() >= maxMobsAttracted) {
           return;
@@ -134,7 +134,7 @@ public class TileAttractor extends AbstractMobObelisk {
   FakePlayer getTarget() {
     if (target == null) {
       target = new Target();
-      target.setOwner(owner);
+      target.setOwner(getOwner());
     }
     return target;
   }
