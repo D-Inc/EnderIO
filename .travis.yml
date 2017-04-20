@@ -16,6 +16,7 @@ script: "./gradlew build test"
 install: 
   - "chmod +x gradlew"
   - "./gradlew setupCIWorkspace"
+after_success: "./gradlew cobertura coveralls"
 
 deploy:
   provider: releases
