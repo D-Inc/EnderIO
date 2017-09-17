@@ -1,9 +1,10 @@
-package crazypants.enderio.item.darksteel.upgrade;
+package crazypants.enderio.integration.top;
 
 import com.enderio.core.common.util.ItemUtil;
 
 import crazypants.enderio.config.Config;
 import crazypants.enderio.item.darksteel.DarkSteelItems;
+import crazypants.enderio.item.darksteel.upgrade.AbstractUpgrade;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraftforge.fml.common.registry.GameRegistry.ItemStackHolder;
@@ -16,7 +17,7 @@ public class TheOneProbeUpgrade extends AbstractUpgrade {
   public static final TheOneProbeUpgrade INSTANCE = new TheOneProbeUpgrade();
   
   @ItemStackHolder("theoneprobe:probe")
-  public static final ItemStack probe = null;
+  public static ItemStack probe = null;
   
   public static TheOneProbeUpgrade loadFromItem(ItemStack stack) {
     if(stack == null) {

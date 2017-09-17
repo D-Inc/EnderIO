@@ -53,6 +53,7 @@ enderio.itemItemConduit.name=Item Conduit
 
 enderio.filterUpgradeBasic.name=Basic Item Filter
 enderio.filterUpgradeAdvanced.name=Advanced Item Filter
+enderio.filterUpgradeLimited.name=Counting Item Filter
 enderio.filterUpgradeSpecies.name=Forestry Species Item Filter
 enderio.itemConduitFilterUpgrade=Upgrade for item conduits
 
@@ -1573,3 +1574,6 @@ fluid.soularium=Molten Soularium
 fluid.glowstone=Glowgas
 fluid.redstone=Molten Redstone
 fluid.ender=Liquidfied Ender Pearls
+
+tile.block_detector_block.name=Block Detector
+tile.block_detector_block_silent.name=Block Detector (Silent)

@@ -23,6 +23,7 @@ import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTBase;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
@@ -30,7 +31,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
 
-public class ItemFilter implements IInventory, IItemFilter {
+public class ItemFilter implements IInventory, ILimitedItemFilter {
 
   private static final boolean DEFAULT_BLACKLIST = false;
 
@@ -53,7 +54,7 @@ public class ItemFilter implements IInventory, IItemFilter {
 
   final List<int[]> oreIds;
 
-  private boolean isAdvanced;
+  private boolean isAdvanced, isLimited;
 
   public void copyFrom(ItemFilter o) {
     isBlacklist = o.isBlacklist;
@@ -66,6 +67,7 @@ public class ItemFilter implements IInventory, IItemFilter {
     oreIds.clear();
     oreIds.addAll(o.oreIds);
     isAdvanced = o.isAdvanced;
+    isLimited = o.isLimited;
   }
 
   public ItemFilter() {
@@ -78,26 +80,53 @@ public class ItemFilter implements IInventory, IItemFilter {
 
   private ItemFilter(int numItems, boolean isAdvanced) {
     this.isAdvanced = isAdvanced;
-    items = new ItemStack[numItems];
+    items = new ItemStack[numItems]; // TODO 1.11
     oreIds = new ArrayList<int[]>(numItems);
     for (int i = 0; i < numItems; i++) {
       oreIds.add(null);
     }
+    isLimited = false;
+  }
+
+  public ItemFilter(int damage) {
+    this(damage > 0);
+    isLimited = damage > 1;
   }
 
   @Override
   public boolean doesFilterCaptureStack(NetworkedInventory inv, ItemStack item) {
-    return isSticky() && itemMatched(item);
+    return isSticky() && itemMatched(item).isPass();
   }
 
   @Override
   public boolean doesItemPassFilter(@Nullable NetworkedInventory inv, ItemStack item) {
-    return !isValid() || (isBlacklist != itemMatched(item));
+    return !isValid() || itemMatched(item).isPass(isBlacklist);
   }
 
-  private boolean itemMatched(ItemStack item) {
+  @Override
+  public int getMaxCountThatPassesFilter(@Nullable NetworkedInventory inv, ItemStack item) {
+    if (isValid()) {
+      FilterResult value = itemMatched(item);
+      if (isLimited && value.hasLimit()) {
+        // Note: No blacklist for limited filters
+        return value.getLimit();
+      } else if (!isLimited && itemMatched(item).isPass(isBlacklist)) {
+        return Integer.MAX_VALUE;
+      }
+    }
+    return 0;
+  }
+
+  /**
+   * Checks if the given item passes the filter.
+   * 
+   * @param item
+   *          The item to check against the filter
+   * @return a FilterResult
+   */
+  private FilterResult itemMatched(ItemStack item) {
     if (damageMode.passesFilter(item)) {
-      // if there are not filter items, but a damage mode is set, the filter will let items pass that match that filter mode
+      // if there are no filter items, but a damage mode is set, the filter will let items pass that match that filter mode
       boolean canPassFilter = damageMode != DamageMode.DISABLED;
       for (int i = 0; i < items.length; i++) {
         ItemStack filterStack = items[i];
@@ -105,20 +134,20 @@ public class ItemFilter implements IInventory, IItemFilter {
           if (item.getItem() == filterStack.getItem()) {
             if (!matchMeta || !item.getHasSubtypes() || item.getMetadata() == filterStack.getMetadata()) {
               if (!matchNBT || isNBTMatch(item, filterStack)) {
-                return true;
+                return new FilterResult(filterStack.stackSize);
               }
             }
           }
           if (useOreDict && isOreDicMatch(i, item)) {
-            return true;
+            return new FilterResult(filterStack.stackSize);
           }
           canPassFilter = false;
         }
       }
-      return canPassFilter;
+      return canPassFilter ? FilterResult.PASS : FilterResult.FAIL;
     }
 
-    return false;
+    return FilterResult.FAIL;
   }
 
   private boolean isOreDicMatch(int filterItemIndex, ItemStack item) {
@@ -165,7 +194,7 @@ public class ItemFilter implements IInventory, IItemFilter {
     int[] res = oreIds.get(filterItemIndex);
     if (res == null) {
       ItemStack item = items[filterItemIndex];
-      if (item == null) {
+      if (Prep.isInvalid(item)) {
         res = new int[0];
       } else {
         res = OreDictionary.getOreIDs(item);
@@ -184,7 +213,7 @@ public class ItemFilter implements IInventory, IItemFilter {
       return true;
     }
     for (ItemStack item : items) {
-      if (item != null) {
+      if (Prep.isValid(item)) {
         return true;
       }
     }
@@ -248,12 +277,15 @@ public class ItemFilter implements IInventory, IItemFilter {
     nbtRoot.setBoolean("useOreDict", useOreDict);
     nbtRoot.setBoolean("sticky", sticky);
     nbtRoot.setBoolean("isAdvanced", isAdvanced);
+    if (isAdvanced) {
+      nbtRoot.setBoolean("isLimited", isLimited);
+    }
     nbtRoot.setByte("damageMode", (byte) damageMode.ordinal());
 
     int i = 0;
     for (ItemStack item : items) {
       NBTTagCompound itemTag = new NBTTagCompound();
-      if (item != null) {
+      if (Prep.isValid(item)) {
         item.writeToNBT(itemTag);
         nbtRoot.setTag("item" + i, itemTag);
       }
@@ -279,6 +311,13 @@ public class ItemFilter implements IInventory, IItemFilter {
     useOreDict = nbtRoot.getBoolean("useOreDict");
     sticky = nbtRoot.getBoolean("sticky");
     isAdvanced = nbtRoot.getBoolean("isAdvanced");
+    if (isAdvanced) {
+      if (nbtRoot.hasKey("isLimited")) {
+        isLimited = nbtRoot.getBoolean("isLimited");
+      } else {
+        isLimited = false;
+      }
+    }
     if (nbtRoot.hasKey("damageMode")) {
       damageMode = DamageMode.values()[nbtRoot.getByte("damageMode") & 255];
     } else {
@@ -286,7 +325,7 @@ public class ItemFilter implements IInventory, IItemFilter {
     }
 
     int numItems = isAdvanced ? 10 : 5;
-    items = new ItemStack[numItems];
+    items = new ItemStack[numItems]; // TODO 1.11
     oreIds.clear();
     for (int i = 0; i < numItems; i++) {
       oreIds.add(null);
@@ -296,7 +335,7 @@ public class ItemFilter implements IInventory, IItemFilter {
       if (tag instanceof NBTTagCompound) {
         items[i] = ItemStack.loadItemStackFromNBT((NBTTagCompound) tag);
       } else {
-        items[i] = null;
+        items[i] = Prep.getEmpty();
       }
     }
   }
@@ -322,18 +361,18 @@ public class ItemFilter implements IInventory, IItemFilter {
   @Override
   public ItemStack getStackInSlot(int i) {
     if (i < 0 || i >= items.length) {
-      return null;
+      return Prep.getEmpty();
     }
-    return items[i];
+    return items[i]; // TODO 1.11
   }
 
   @Override
   public ItemStack decrStackSize(int fromSlot, int amount) {
     oreIds.set(fromSlot, null);
     ItemStack item = items[fromSlot];
-    items[fromSlot] = null;
-    if (item == null) {
-      return null;
+    items[fromSlot] = Prep.getEmpty();
+    if (Prep.isInvalid(item)) {
+      return Prep.getEmpty();
     }
     item.stackSize = 0;
     return item;
@@ -341,11 +380,11 @@ public class ItemFilter implements IInventory, IItemFilter {
 
   @Override
   public void setInventorySlotContents(int i, @Nullable ItemStack itemstack) {
-    if (itemstack != null) {
+    if (Prep.isValid(itemstack)) {
       items[i] = itemstack.copy();
       items[i].stackSize = 0;
     } else {
-      items[i] = null;
+      items[i] = Prep.getEmpty();
     }
     oreIds.set(i, null);
   }
@@ -353,10 +392,10 @@ public class ItemFilter implements IInventory, IItemFilter {
   @Override
   public ItemStack removeStackFromSlot(int index) {
     if (index < 0 || index >= items.length) {
-      return null;
+      return Prep.getEmpty();
     }
     ItemStack res = items[index];
-    items[index] = null;
+    items[index] = Prep.getEmpty();
     return res;
   }
 
@@ -429,6 +468,11 @@ public class ItemFilter implements IInventory, IItemFilter {
     return isAdvanced;
   }
 
+  @Override
+  public boolean isLimited() {
+    return isLimited;
+  }
+
   public boolean isDefault() {
     return !isAdvanced && !isValid() && isBlacklist == DEFAULT_BLACKLIST && matchMeta == DEFAULT_META && matchNBT == DEFAULT_MBT
         && useOreDict == DEFAULT_ORE_DICT && sticky == DEFAULT_STICKY;
@@ -450,13 +494,15 @@ public class ItemFilter implements IInventory, IItemFilter {
       this.y = y;
       this.slot = slot;
       this.cb = cb;
+      this.displayStdOverlay = isLimited;
+      this.stackSizeLimit = isLimited ? 64 * 3 : 1;
     }
 
     @Override
     public void putStack(ItemStack stack) {
-      if (stack != null) {
+      if (Prep.isValid(stack)) {
         stack = stack.copy();
-        stack.stackSize = 1;
+        stack.stackSize = MathHelper.clamp_int(stack.stackSize, 1, stackSizeLimit);
       }
       items[slot] = stack;
       cb.run();
@@ -485,6 +531,56 @@ public class ItemFilter implements IInventory, IItemFilter {
   @Override
   public int getFieldCount() {
     return 0;
+  }
+
+  public static class FilterResult {
+
+    static final FilterResult PASS = new FilterResult(true);
+    static final FilterResult FAIL = new FilterResult(false);
+
+    private final boolean pass;
+    private final int limit;
+
+    /**
+     * Creates a pass/fail result without stack size limit.
+     */
+    private FilterResult(boolean pass) {
+      this.pass = pass;
+      this.limit = -1;
+    }
+
+    /**
+     * Creates a pass result with the given stack size limit.
+     */
+    public FilterResult(int limit) {
+      this.pass = true;
+      this.limit = limit;
+    }
+
+    /**
+     * @return true if the item passes the filter
+     */
+    public boolean isPass() {
+      return pass;
+    }
+
+    /**
+     * @return the result of isPass() but inverted if the invert parameter is true
+     */
+    public boolean isPass(boolean invert) {
+      return pass != invert;
+    }
+
+    public int getLimit() {
+      return limit;
+    }
+
+    /**
+     * @return true if the item passes the filter and it matched a rule that gave a stack size limit
+     */
+    public boolean hasLimit() {
+      return pass && limit >= 0;
+    }
   }
 
 }

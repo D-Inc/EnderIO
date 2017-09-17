@@ -12,6 +12,7 @@ import crazypants.enderio.conduit.item.NetworkedInventory.Target;
 import crazypants.enderio.conduit.item.filter.IItemFilter;
 import crazypants.enderio.machine.invpanel.server.InventoryDatabaseServer;
 import net.minecraft.item.ItemStack;
+import net.minecraft.profiler.Profiler;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
@@ -47,14 +48,14 @@ public class ItemConduitNetwork extends AbstractConduitNetwork<IItemConduit, IIt
         IItemHandler extCon = con.getExternalInventory(direction);
         if(extCon != null) {
           BlockPos p = te.getPos().offset(direction);
-          inventoryAdded(con, direction, p.getX(), p.getY(), p.getZ(), extCon);
+          inventoryAdded(con, direction, p, extCon);
         }
       }
     }
   }
 
-  public void inventoryAdded(IItemConduit itemConduit, EnumFacing direction, int x, int y, int z, IItemHandler externalInventory) {
-    BlockCoord bc = new BlockCoord(x, y, z);
+  public void inventoryAdded(IItemConduit itemConduit, EnumFacing direction, BlockPos pos, IItemHandler externalInventory) {
+    BlockCoord bc = new BlockCoord(pos);
     NetworkedInventory inv = new NetworkedInventory(this, itemConduit, direction, externalInventory, bc);
     inventories.add(inv);
     getOrCreate(bc).add(inv);
@@ -89,8 +90,8 @@ public class ItemConduitNetwork extends AbstractConduitNetwork<IItemConduit, IIt
     return res;
   }
 
-  public void inventoryRemoved(ItemConduit itemConduit, int x, int y, int z) {
-    BlockCoord bc = new BlockCoord(x, y, z);
+  public void inventoryRemoved(ItemConduit itemConduit, BlockPos pos) {
+    BlockCoord bc = new BlockCoord(pos);
     List<NetworkedInventory> invs = getOrCreate(bc);
     NetworkedInventory remove = null;
     for (NetworkedInventory ni : invs) {
@@ -144,6 +145,8 @@ public class ItemConduitNetwork extends AbstractConduitNetwork<IItemConduit, IIt
     }
   }
 
+  // not used?
+  @Deprecated
   public ItemStack sendItems(ItemConduit itemConduit, ItemStack item, EnumFacing side) {
     if(doingSend) {
       return item;
@@ -211,19 +214,25 @@ public class ItemConduitNetwork extends AbstractConduitNetwork<IItemConduit, IIt
   }
 
   @Override
-  public void doNetworkTick() {
+  public void doNetworkTick(Profiler theProfiler) {
     for (NetworkedInventory ni : inventories) {
       if(requiresSort) {
+        theProfiler.startSection("updateInsertOrder");
         ni.updateInsertOrder();
+        theProfiler.endSection();
       }
+      theProfiler.startSection("NetworkedInventoryTick");
       ni.onTick();
+      theProfiler.endSection();
     }
     if(requiresSort) {
       requiresSort = false;
       changeCount++;
     }
     if(database != null) {
+      theProfiler.startSection("DatabaseTick");
       database.tick();
+      theProfiler.endSection();
     }
   }
 

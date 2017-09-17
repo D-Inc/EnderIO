@@ -1,9 +1,11 @@
-package crazypants.enderio.machine.farm.farmers;
+package crazypants.enderio.integration.natura;
 
 
-import crazypants.enderio.config.Config;
 import crazypants.enderio.machine.farm.FarmNotification;
 import crazypants.enderio.machine.farm.TileFarmStation;
+import crazypants.enderio.machine.farm.farmers.HarvestResult;
+import crazypants.enderio.machine.farm.farmers.IHarvestResult;
+import crazypants.enderio.machine.farm.farmers.PickableFarmer;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.item.ItemStack;
@@ -13,6 +15,7 @@ public class NaturaBerryFarmer extends PickableFarmer {
 
   public NaturaBerryFarmer(Block plantedBlock, int plantedBlockMeta, int grownBlockMeta, ItemStack seeds) {
     super(plantedBlock, plantedBlockMeta, grownBlockMeta, seeds);
+    checkGroundForFarmland = requiresFarmland = false;
   }
 
   @Override
@@ -28,20 +31,24 @@ public class NaturaBerryFarmer extends PickableFarmer {
     IHarvestResult res = new HarvestResult();
 
     BlockPos checkBlock = bc;
-    for (int i = 0; i < 5 && farm.hasHoe(); i++) {
+    while (checkBlock != null && checkBlock.getY() <= 255 && farm.hasHoe()) {
       meta = farm.getBlockState(checkBlock);
       block = farm.getBlock(checkBlock);
+      if (block != getPlantedBlock()) {
+        checkBlock = null;
+      } else {
 
-      if (super.canHarvest(farm, bc, block, meta)) { // redundant check because our canHarvest checks all 5 blocks so a bush may be invalid in the stack of 5
-        IHarvestResult blockRes = super.harvestBlock(farm, checkBlock, block, meta);
+        if (getFullyGrownBlockMeta() == block.getMetaFromState(meta)) {
+          IHarvestResult blockRes = super.harvestBlock(farm, checkBlock, block, meta);
 
-        if (blockRes != null) {
-          res.getHarvestedBlocks().add(checkBlock);
-          res.getDrops().addAll(blockRes.getDrops());
+          if (blockRes != null) {
+            res.getHarvestedBlocks().add(checkBlock);
+            res.getDrops().addAll(blockRes.getDrops());
+          }
         }
-      }
 
-      checkBlock = checkBlock.up();
+        checkBlock = checkBlock.up();
+      }
     }
 
     if (res.getHarvestedBlocks().isEmpty()) {
@@ -53,20 +60,18 @@ public class NaturaBerryFarmer extends PickableFarmer {
 
   @Override
   public boolean canHarvest(TileFarmStation farm, BlockPos bc, Block block, IBlockState bs) {
-    int meta = bs.getBlock().getMetaFromState(bs);
-    if (!Config.farmEssenceBerriesEnabled && "tile.ore.berries.two".equals(block.getUnlocalizedName()) && meta == grownBlockMeta) {
-      return false;
-    }
     BlockPos checkBlock = bc;
-    for (int i = 0; i < 5; i++) {
+    while (checkBlock.getY() <= 255) {
       bs = farm.getBlockState(checkBlock);
       block = bs.getBlock();
+      if (block != getPlantedBlock()) {
+        return false;
+      }
       if (super.canHarvest(farm, checkBlock, block, bs)) {
         return true;
       }
       checkBlock = checkBlock.up();
     }
-
     return false;
   }
 }

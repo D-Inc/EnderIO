@@ -28,9 +28,7 @@ import crazypants.enderio.teleport.ContainerTravelAccessable;
 import crazypants.enderio.teleport.ContainerTravelAuth;
 import crazypants.enderio.teleport.GuiTravelAccessable;
 import crazypants.enderio.teleport.GuiTravelAuth;
-import crazypants.enderio.teleport.packet.PacketAccessMode;
 import crazypants.enderio.teleport.packet.PacketDrainStaff;
-import crazypants.enderio.teleport.packet.PacketLabel;
 import crazypants.enderio.teleport.packet.PacketOpenAuthGui;
 import crazypants.enderio.teleport.packet.PacketPassword;
 import crazypants.enderio.teleport.packet.PacketTravelEvent;
@@ -63,8 +61,6 @@ public class BlockTravelAnchor<T extends TileTravelAnchor> extends BlockEio<T> i
     ISmartRenderAwareBlock, IPaintable.IBlockPaintableBlock, IPaintable.IWrenchHideablePaint, IHaveRenderers, IHaveTESR {
 
   public static BlockTravelAnchor<TileTravelAnchor> create() {
-    PacketHandler.INSTANCE.registerMessage(PacketAccessMode.class, PacketAccessMode.class, PacketHandler.nextID(), Side.SERVER);
-    PacketHandler.INSTANCE.registerMessage(PacketLabel.class, PacketLabel.class, PacketHandler.nextID(), Side.SERVER);
     PacketHandler.INSTANCE.registerMessage(PacketTravelEvent.class, PacketTravelEvent.class, PacketHandler.nextID(), Side.SERVER);
     PacketHandler.INSTANCE.registerMessage(PacketDrainStaff.class, PacketDrainStaff.class, PacketHandler.nextID(), Side.SERVER);
     PacketHandler.INSTANCE.registerMessage(PacketOpenAuthGui.class, PacketOpenAuthGui.class, PacketHandler.nextID(), Side.SERVER);
@@ -203,10 +199,11 @@ public class BlockTravelAnchor<T extends TileTravelAnchor> extends BlockEio<T> i
 
   @Override
   public Object getServerGuiElement(int ID, EntityPlayer player, World world, int x, int y, int z) {
-    TileEntity te = world.getTileEntity(new BlockPos(x, y, z));
-    if (te instanceof ITravelAccessable) {
+    @SuppressWarnings("null")
+    T te = getTileEntity(world, new BlockPos(x, y, z));
+    if (te != null) {
       if (GuiID.GUI_ID_TRAVEL_ACCESSABLE.is(ID)) {
-        return new ContainerTravelAccessable(player.inventory, (ITravelAccessable) te, world);
+        return new ContainerTravelAccessable(player.inventory, te, world);
       } else {
         return new ContainerTravelAuth(player.inventory);
       }
@@ -216,12 +213,13 @@ public class BlockTravelAnchor<T extends TileTravelAnchor> extends BlockEio<T> i
 
   @Override
   public Object getClientGuiElement(int ID, EntityPlayer player, World world, int x, int y, int z) {
-    TileEntity te = world.getTileEntity(new BlockPos(x, y, z));
-    if (te instanceof ITravelAccessable) {
+    @SuppressWarnings("null")
+    T te = getTileEntity(world, new BlockPos(x, y, z));
+    if (te != null) {
       if (GuiID.GUI_ID_TRAVEL_ACCESSABLE.is(ID)) {
-        return new GuiTravelAccessable(player.inventory, (ITravelAccessable) te, world);
+        return new GuiTravelAccessable<T>(player.inventory, te, world);
       } else {
-        return new GuiTravelAuth(player, (ITravelAccessable) te, world);
+        return new GuiTravelAuth(player, te, world);
       }
     }
     return null;

@@ -304,7 +304,6 @@ public final class Config {
   public static boolean farmAxeDamageOnLeafBreak = false;
   public static float farmToolTakeDamageChance = 1;
   public static boolean disableFarmNotification = false;
-  public static boolean farmEssenceBerriesEnabled = true;
   public static boolean farmManaBeansEnabled = false;
   public static boolean farmHarvestJungleWhenCocoa = false;
   public static String[] hoeStrings = new String[] {
@@ -447,6 +446,8 @@ public final class Config {
   public static int soulBinderTunedPressurePlateLevels = 2;
   public static int soulBinderTunedPressurePlateRF = 250000;
   public static int soulBinderMaxXpLevel = 40;
+
+  public static float slicenspliceToolDamageChance = 0.01f;
 
   public static boolean powerConduitCanDifferentTiersConnect = false;
   public static int powerConduitTierOneRF = 640;
@@ -1160,9 +1161,6 @@ public final class Config {
     disableFarmNotification = config.get(sectionFarm.name, "disableFarmNotifications", disableFarmNotification,
         "Disable the notification text above the farm block.").getBoolean();
 
-    farmEssenceBerriesEnabled = config.get(sectionFarm.name, "farmEssenceBerriesEnabled", farmEssenceBerriesEnabled,
-        "This setting controls whether essence berry bushes from TiC can be harvested by the farm.").getBoolean();
-
     farmManaBeansEnabled = config.get(sectionFarm.name, "farmManaBeansEnabled", farmManaBeansEnabled,
             "This setting controls whether mana beans from Thaumcraft can be harvested by the farm.").getBoolean();
 
@@ -1361,6 +1359,11 @@ public final class Config {
         "The number of levels required to tune a pressure plate.").getInt(soulBinderTunedPressurePlateLevels);
 
     soulBinderMaxXpLevel = config.get(sectionSoulBinder.name, "soulBinderMaxXPLevel", soulBinderMaxXpLevel, "Maximum level of XP the soul binder can contain.").getInt();
+
+    slicenspliceToolDamageChance = (float) config.get(sectionAdvanced.name, "slicenspliceToolDamageChance", slicenspliceToolDamageChance,
+        "The chance that a tool will take damage each tick while the Slice'n'Splice is running (0 = no chance, 1 = 100% chance). "
+            + "Tools will always take damage when the crafting is finished.")
+        .getDouble(slicenspliceToolDamageChance);
 
     spawnGuardStopAllSlimesDebug = config.getBoolean("spawnGuardStopAllSlimesDebug", sectionAttractor.name, spawnGuardStopAllSlimesDebug,
         "When true slimes wont be allowed to spawn at all. Only added to aid testing in super flat worlds.");

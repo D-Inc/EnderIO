@@ -17,6 +17,7 @@ import crazypants.enderio.block.BlockDarkSteelLadder;
 import crazypants.enderio.block.BlockDarkSteelTrapDoor;
 import crazypants.enderio.block.BlockDecoration;
 import crazypants.enderio.block.BlockDecorationFacing;
+import crazypants.enderio.block.BlockDetector;
 import crazypants.enderio.block.BlockReinforcedObsidian;
 import crazypants.enderio.block.BlockSelfResettingLever;
 import crazypants.enderio.conduit.BlockConduitBundle;
@@ -299,6 +300,9 @@ public enum ModObject implements IModObject {
     }
   },
 
+  block_detector_block(BlockDetector.class),
+  block_detector_block_silent(BlockDetector.class, "createSilent"),
+
   ;
 
   private final @Nonnull String unlocalisedName;
@@ -355,11 +359,15 @@ public enum ModObject implements IModObject {
     }
     Object obj = null;
     try {
-      obj = clazz.getDeclaredMethod(methodName, (Class<?>[])null).invoke(null, (Object[])null);
-    } catch (Throwable e) {
-      String str = "ModObject:create: Could not create instance for " + clazz + " using method " + methodName;
-      Log.error(str + " Exception: " + e);
-      throw new RuntimeException(str, e);
+      obj = clazz.getDeclaredMethod(methodName, new Class<?>[] { IModObject.class }).invoke(null, new Object[] { this });
+    } catch (Throwable e0) {
+      try {
+        obj = clazz.getDeclaredMethod(methodName, (Class<?>[]) null).invoke(null, (Object[]) null);
+      } catch (Throwable e) {
+        String str = "ModObject:create: Could not create instance for " + clazz + " using method " + methodName;
+        Log.error(str + " Exception: " + e0 + " / " + e);
+        throw new RuntimeException(str, e);
+      }
     }
     if(obj instanceof Item) {
       item = (Item)obj;

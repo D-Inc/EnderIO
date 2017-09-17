@@ -9,14 +9,12 @@ import crazypants.enderio.machine.farm.TileFarmStation;
 import crazypants.util.Prep;
 import crazypants.util.Things;
 import net.minecraft.block.Block;
-import net.minecraft.block.SoundType;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumFacing;
-import net.minecraft.util.SoundCategory;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.common.IPlantable;
@@ -111,19 +109,11 @@ public class CustomSeedFarmer implements IFarmerJoe {
 
   @Override
   public boolean prepareBlock(TileFarmStation farm, BlockPos bc, Block block, IBlockState meta) {
-    if (!farm.isOpen(bc)) {
+    if (!farm.isOpen(bc) || !farm.hasSeed(getSeeds(), bc)) {
       return false;
     }
-    if (requiresFarmland()) {
-      if (isGroundTilled(farm, bc)) {
-        return plantFromInventory(farm, bc);
-      }
-      if (farm.hasSeed(getSeeds(), bc)) {
-        boolean tilled = tillBlock(farm, bc);
-        if (!tilled) {
-          return false;
-        }
-      }
+    if (requiresFarmland() && !isGroundTilled(farm, bc) && !farm.tillBlock(bc)) {
+      return false;
     }
     return plantFromInventory(farm, bc);
   }
@@ -201,22 +191,6 @@ public class CustomSeedFarmer implements IFarmerJoe {
     }
 
     return new HarvestResult(result, bc);
-  }
-
-  protected boolean tillBlock(TileFarmStation farm, BlockPos plantingLocation) {
-    World worldObj = farm.getWorld();
-    BlockPos dirtLoc = plantingLocation.down();
-    Block dirtBlock = farm.getBlock(dirtLoc);
-    if ((dirtBlock == Blocks.DIRT || dirtBlock == Blocks.GRASS) && farm.hasHoe()) {
-      farm.damageHoe(1, dirtLoc);
-      worldObj.setBlockState(dirtLoc, Blocks.FARMLAND.getDefaultState());
-      final SoundType soundType = Blocks.FARMLAND.getSoundType(Blocks.FARMLAND.getDefaultState(), worldObj, dirtLoc, null);
-      worldObj.playSound(dirtLoc.getX() + 0.5F, dirtLoc.getY() + 0.5F, dirtLoc.getZ() + 0.5F, soundType.getStepSound(), SoundCategory.BLOCKS,
-          (soundType.getVolume() + 1.0F) / 2.0F, soundType.getPitch() * 0.8F, false);
-      farm.actionPerformed(false);
-      return true;
-    }
-    return false;
   }
 
   protected boolean isGroundTilled(TileFarmStation farm, BlockPos plantingLocation) {

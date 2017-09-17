@@ -23,6 +23,7 @@ import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.IEntityLivingData;
 import net.minecraft.entity.SharedMonsterAttributes;
+import net.minecraft.entity.monster.EntityGuardian;
 import net.minecraft.entity.monster.EntitySkeleton;
 import net.minecraft.entity.monster.EntityZombie;
 import net.minecraft.entity.monster.SkeletonType;
@@ -128,7 +129,8 @@ public class CapturedMob {
   }
 
   public static @Nullable CapturedMob create(@Nullable Entity entity) {
-    if (!(entity instanceof EntityLivingBase) || entity.worldObj == null || entity.worldObj.isRemote || entity instanceof EntityPlayer || isBlacklisted(entity)) {
+    if (!(entity instanceof EntityLivingBase) || entity.isDead || entity.worldObj == null || entity.worldObj.isRemote || entity instanceof EntityPlayer
+        || isBlacklisted(entity)) {
       return null;
     }
     return new CapturedMob((EntityLivingBase) entity);
@@ -211,7 +213,8 @@ public class CapturedMob {
 
   public static boolean isBlacklisted(@Nonnull Entity entity) {
     String entityId = EntityList.getEntityString(entity);
-    if (entityId == null || entityId.trim().isEmpty() || (!Config.soulVesselCapturesBosses && !entity.isNonBoss())) {
+    if (entityId == null || entityId.trim().isEmpty() || (!Config.soulVesselCapturesBosses && !entity.isNonBoss())
+        || (!Config.soulVesselCapturesBosses && entity instanceof EntityGuardian && ((EntityGuardian) entity).isElder())) {
       return true;
     }
     return Config.soulVesselBlackList.contains(entityId) || blacklist.contains(entityId);
@@ -313,6 +316,11 @@ public class CapturedMob {
         }
         ((EntityLiving) entity).onInitialSpawn(difficulty, livingData);
       }
+    }
+
+    if (entity instanceof EntityGuardian && entityNbt != null) {
+      final Entity entityOriginal = EntityList.createEntityFromNBT(entityNbt, world);
+      ((EntityGuardian) entity).setElder(entityOriginal instanceof EntityGuardian && ((EntityGuardian) entityOriginal).isElder());
     }
 
     if (variant != null) {

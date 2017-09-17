@@ -78,6 +78,9 @@ public class TOPCompatibility implements Function<ITheOneProbe, Void>, IProbeInf
 
   @Override
   public void addProbeInfo(ProbeMode mode, IProbeInfo probeInfo, EntityPlayer player, World world, IBlockState blockState, IProbeHitData hitData) {
+    if (mode == ProbeMode.DEBUG) {
+      probeInfo.text(blockState.toString());
+    }
     if (probeInfo != null && world != null && blockState != null && hitData != null && (blockState.getBlock() instanceof BlockEio || blockState.getBlock() instanceof IPaintable)) {
       TileEntity tileEntity = BlockEnder.getAnyTileEntitySafe(world, hitData.getPos());
       if (tileEntity != null) {
@@ -245,7 +248,7 @@ public class TOPCompatibility implements Function<ITheOneProbe, Void>, IProbeInf
 
   private void mkOwner(ProbeMode mode, EioBox eiobox, TOPData data) {
     if (mode == ProbeMode.DEBUG && data.owner != null) {
-      ItemStack skull = new ItemStack(Items.SKULL, 1, 2);
+      ItemStack skull = new ItemStack(Items.SKULL, 1, 3);
       NBTTagCompound nbt = new NBTTagCompound();
       nbt.setTag("SkullOwner", NBTUtil.writeGameProfile(new NBTTagCompound(), data.owner.getAsGameProfile()));
       skull.setTagCompound(nbt);

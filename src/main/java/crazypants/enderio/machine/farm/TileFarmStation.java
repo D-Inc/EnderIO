@@ -6,6 +6,8 @@ import java.util.UUID;
 
 import javax.annotation.Nonnull;
 
+import com.enderio.core.client.render.BoundingBox;
+import com.enderio.core.common.vecmath.Vector4f;
 import com.mojang.authlib.GameProfile;
 
 import crazypants.enderio.ModObject;
@@ -19,6 +21,8 @@ import crazypants.enderio.machine.IPoweredTask;
 import crazypants.enderio.machine.SlotDefinition;
 import crazypants.enderio.machine.farm.farmers.FarmersCommune;
 import crazypants.enderio.machine.farm.farmers.IHarvestResult;
+import crazypants.enderio.machine.ranged.IRanged;
+import crazypants.enderio.machine.ranged.RangeParticle;
 import crazypants.enderio.network.PacketHandler;
 import crazypants.enderio.paint.IPaintable;
 import crazypants.enderio.power.PowerHandlerUtil;
@@ -29,6 +33,7 @@ import info.loenwind.autosave.annotations.Storable;
 import info.loenwind.autosave.annotations.Store;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.client.Minecraft;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityItem;
@@ -38,6 +43,7 @@ import net.minecraft.init.Enchantments;
 import net.minecraft.init.SoundEvents;
 import net.minecraft.item.ItemShears;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.EnumActionResult;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.SoundCategory;
@@ -45,6 +51,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.EnumSkyBlock;
 import net.minecraftforge.energy.IEnergyStorage;
 import net.minecraftforge.fml.common.network.NetworkRegistry.TargetPoint;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.server.permission.PermissionAPI;
 import net.minecraftforge.server.permission.context.BlockPosContext;
 
@@ -59,7 +67,7 @@ import static crazypants.enderio.config.Config.farmEvictEmptyRFTools;
 import static crazypants.enderio.config.Config.farmStopOnNoOutputSlots;
 
 @Storable
-public class TileFarmStation extends AbstractPoweredTaskEntity implements IPaintable.IPaintableTileEntity {
+public class TileFarmStation extends AbstractPoweredTaskEntity implements IPaintable.IPaintableTileEntity, IRanged {
 
   private static final int TICKS_PER_WORK = 20;
 
@@ -180,21 +188,47 @@ public class TileFarmStation extends AbstractPoweredTaskEntity implements IPaint
   public boolean tillBlock(BlockPos plantingLocation) {
     BlockPos dirtLoc = plantingLocation.down();
     Block dirtBlock = getBlock(dirtLoc);
-    if ((dirtBlock == Blocks.DIRT || dirtBlock == Blocks.GRASS)) {
-      if (!hasHoe()) {
-        setNotification(FarmNotification.NO_HOE);
+    if (dirtBlock == Blocks.FARMLAND) {
+      return true;
+    } else {
+      ItemStack tool = getTool(ToolType.HOE);
+      if (Prep.isInvalid(tool)) {
+        if (dirtBlock == Blocks.DIRT || dirtBlock == Blocks.GRASS) {
+          setNotification(FarmNotification.NO_HOE);
+        }
+        // else we don't know if the ground can even be tilled, so no notification
         return false;
       }
-      damageHoe(1, dirtLoc);
-      worldObj.setBlockState(dirtLoc, Blocks.FARMLAND.getDefaultState());
+
+
+      boolean doDamage = worldObj.rand.nextFloat() < Config.farmToolTakeDamageChance && canDamage(tool);
+      if (!doDamage) {
+        tool = tool.copy();
+      }
+
+      int origDamage = tool.getItemDamage();
+      EnumActionResult itemUse = tool.getItem().onItemUse(tool, farmerJoe, worldObj, dirtLoc, EnumHand.MAIN_HAND, EnumFacing.UP, 0.5f, 0.5f, 0.5f);
+
+      if (itemUse != EnumActionResult.SUCCESS) {
+        return false;
+      }
+
+      if (doDamage) {
+        if (origDamage == tool.getItemDamage()) {
+          tool.damageItem(1, farmerJoe);
+        }
+
+        if (Prep.isInvalid(tool) || tool.stackSize == 0 || tool.getItemDamage() >= tool.getMaxDamage()) { // TODO 1.11
+          destroyTool(ToolType.HOE);
+          markDirty();
+        }
+      }
+
       worldObj.playSound(dirtLoc.getX() + 0.5F, dirtLoc.getY() + 0.5F, dirtLoc.getZ() + 0.5F, SoundEvents.BLOCK_GRASS_STEP, SoundCategory.BLOCKS,
           (Blocks.FARMLAND.getSoundType().getVolume() + 1.0F) / 2.0F, Blocks.FARMLAND.getSoundType().getPitch() * 0.8F, false);
       actionPerformed(false);
       return true;
-    } else if (dirtBlock == Blocks.FARMLAND) {
-      return true;
     }
-    return false;
   }
 
   public int getMaxLootingValue() {
@@ -457,6 +491,7 @@ public class TileFarmStation extends AbstractPoweredTaskEntity implements IPaint
     if (farmerJoe == null) {
       farmerJoe = new FakePlayerEIO(worldObj, getLocation(), FARMER_PROFILE);
       farmerJoe.setOwner(getOwner());
+      farmerJoe.worldObj = new PickupWorld(worldObj, farmerJoe);
     }
 
     BlockPos bc = null;
@@ -492,18 +527,27 @@ public class TileFarmStation extends AbstractPoweredTaskEntity implements IPaint
 
     if (!isOpen(bc)) {
       IHarvestResult harvest = FarmersCommune.instance.harvestBlock(this, bc, block, bs);
-      if (harvest != null && harvest.getDrops() != null && !harvest.getDrops().isEmpty()) {
-        PacketFarmAction pkt = new PacketFarmAction(harvest.getHarvestedBlocks());
-        PacketHandler.INSTANCE.sendToAllAround(pkt, new TargetPoint(worldObj.provider.getDimension(), bc.getX(), bc.getY(), bc.getZ(), 64));
-        for (EntityItem ei : harvest.getDrops()) {
-          if (ei != null) {
-            insertHarvestDrop(ei, bc);
-            if (!ei.isDead) {
-              worldObj.spawnEntityInWorld(ei);
+      if (harvest != null) {
+        boolean done = false;
+        if (harvest.getHarvestedBlocks() != null && !harvest.getHarvestedBlocks().isEmpty()) {
+          PacketFarmAction pkt = new PacketFarmAction(harvest.getHarvestedBlocks());
+          PacketHandler.INSTANCE.sendToAllAround(pkt, new TargetPoint(worldObj.provider.getDimension(), bc.getX(), bc.getY(), bc.getZ(), 64));
+          done = true;
+        }
+        if (harvest.getDrops() != null) {
+          for (EntityItem ei : harvest.getDrops()) {
+            if (ei != null) {
+              insertHarvestDrop(ei, bc);
+              if (!ei.isDead) {
+                worldObj.spawnEntityInWorld(ei);
+              }
+              done = true;
             }
           }
         }
-        return;
+        if (done) {
+          return;
+        }
       }
     }
 
@@ -512,30 +556,53 @@ public class TileFarmStation extends AbstractPoweredTaskEntity implements IPaint
       return;
     }
 
-    if (hasBonemeal() && bonemealCooldown-- <= 0) {
+    if (hasBonemeal() && bonemealCooldown-- <= 0 && random.nextFloat() <= .75f) {
       Fertilizer fertilizer = Fertilizer.getInstance(inventory[minFirtSlot]);
       if ((fertilizer.applyOnPlant() != isOpen(bc)) || (fertilizer.applyOnAir() == worldObj.isAirBlock(bc))) {
-        farmerJoe.inventory.mainInventory[0] = inventory[minFirtSlot];
-        farmerJoe.inventory.currentItem = 0;
+        setJoeUseItem(inventory[minFirtSlot]);
         if (fertilizer.apply(inventory[minFirtSlot], farmerJoe, worldObj, bc)) {
-          inventory[minFirtSlot] = farmerJoe.inventory.mainInventory[0];
+          inventory[minFirtSlot] = clearJoeUseItem(true);
           PacketHandler.INSTANCE.sendToAllAround(new PacketFarmAction(bc),
               new TargetPoint(worldObj.provider.getDimension(), bc.getX(), bc.getY(), bc.getZ(), 64));
           if (Prep.isValid(inventory[minFirtSlot]) && inventory[minFirtSlot].stackSize == 0) {
             inventory[minFirtSlot] = Prep.getEmpty(); // TODO 1.11 remove
           }
           usePower(Config.farmBonemealActionEnergyUseRF);
-          bonemealCooldown = 20;
+          bonemealCooldown = 16;
         } else {
           usePower(Config.farmBonemealTryEnergyUseRF);
-          bonemealCooldown = 5;
+          bonemealCooldown = 4;
         }
-        farmerJoe.inventory.mainInventory[0] = Prep.getEmpty();
+        clearJoeUseItem(true);
       }
     }
   }
 
-  private int bonemealCooldown = 5; // no need to persist this
+  public void setJoeUseItem(ItemStack item) {
+    farmerJoe.inventory.mainInventory[0] = item;
+    farmerJoe.inventory.currentItem = 0;
+  }
+
+  public ItemStack clearJoeUseItem(boolean retreiveHandItem) {
+    ItemStack item = Prep.getEmpty();
+    if (retreiveHandItem) {
+      item = farmerJoe.inventory.mainInventory[0];
+      farmerJoe.inventory.mainInventory[0] = Prep.getEmpty();
+    }
+
+    ItemStack[] inv = farmerJoe.inventory.mainInventory;
+    for (int slot = 0; slot < inv.length; slot++) {
+      ItemStack stack = inv[slot];
+      if (Prep.isValid(stack)) {
+        inv[slot] = null;
+        insertItem(stack);
+      }
+    }
+
+    return item;
+  }
+
+  private int bonemealCooldown = 4; // no need to persist this
 
   private boolean hasBonemeal() {
     if (Prep.isValid(inventory[minFirtSlot])) {
@@ -657,6 +724,15 @@ public class TileFarmStation extends AbstractPoweredTaskEntity implements IPaint
           item.setDead();
         }
       }
+    }
+  }
+
+  private void insertItem(ItemStack stack) {
+    int numInserted = insertResult(stack, getPos());
+    stack.stackSize -= numInserted;
+    if (Prep.isValid(stack) && stack.stackSize > 0) {
+      EntityItem entityItem = new EntityItem(getWorld(), getPos().getX() + .5, getPos().getY() + .5, getPos().getZ() + .5, stack);
+      getWorld().spawnEntityInWorld(entityItem);
     }
   }
 
@@ -791,5 +867,39 @@ public class TileFarmStation extends AbstractPoweredTaskEntity implements IPaint
   public boolean shouldRenderInPass(int pass) {
     return pass == 1;
   }
+
+  // RANGE
+
+  private boolean showingRange;
+
+  @Override
+  @SideOnly(Side.CLIENT)
+  public boolean isShowingRange() {
+    return showingRange;
+  }
+
+  private final static Vector4f color = new Vector4f(145f / 255f, 82f / 255f, 21f / 255f, .4f);
+
+  @SideOnly(Side.CLIENT)
+  public void setShowRange(boolean showRange) {
+    if (showingRange == showRange) {
+      return;
+    }
+    showingRange = showRange;
+    if (showingRange) {
+      Minecraft.getMinecraft().effectRenderer.addEffect(new RangeParticle<TileFarmStation>(this, color));
+    }
+  }
+
+  @Override
+  public BoundingBox getBounds() {
+    return new BoundingBox(getPos()).expand(getRange(), 0, getRange());
+  }
+
+  public float getRange() {
+    return getFarmSize();
+  }
+
+  // RANGE END
 
 }

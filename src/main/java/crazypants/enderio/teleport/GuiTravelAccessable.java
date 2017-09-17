@@ -8,22 +8,20 @@ import org.lwjgl.opengl.GL11;
 import com.enderio.core.client.gui.button.CheckBox;
 import com.enderio.core.client.gui.widget.TextFieldEnder;
 import com.enderio.core.client.render.ColorUtil;
-import com.enderio.core.common.util.BlockCoord;
 
 import crazypants.enderio.EnderIO;
 import crazypants.enderio.api.teleport.ITravelAccessable;
 import crazypants.enderio.api.teleport.ITravelAccessable.AccessMode;
 import crazypants.enderio.gui.GuiContainerBaseEIO;
-import crazypants.enderio.network.PacketHandler;
-import crazypants.enderio.teleport.packet.PacketAccessMode;
-import crazypants.enderio.teleport.packet.PacketLabel;
+import crazypants.enderio.network.GuiPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.entity.player.InventoryPlayer;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 
-public class GuiTravelAccessable extends GuiContainerBaseEIO {
+public class GuiTravelAccessable<T extends TileEntity & ITravelAccessable> extends GuiContainerBaseEIO {
 
   private static final int ID_PUBLIC = 0;
   private static final int ID_PRIVATE = 1;
@@ -39,20 +37,20 @@ public class GuiTravelAccessable extends GuiContainerBaseEIO {
   private String privateStr;
   private String protectedStr;
 
-  private ITravelAccessable te;
+  protected T te;
   private int col0x;
   private int col1x;
   private int col2x;
 
   protected World world;
 
-  public GuiTravelAccessable(InventoryPlayer playerInv, ITravelAccessable te, World world) {
-    this(new ContainerTravelAccessable(playerInv, te, world));
+  public GuiTravelAccessable(InventoryPlayer playerInv, T te, World world) {
+    this(te, new ContainerTravelAccessable(playerInv, te, world));
   }
 
-  public GuiTravelAccessable(ContainerTravelAccessable container) {
+  public GuiTravelAccessable(T te, ContainerTravelAccessable container) {
     super(container, "travelAccessable");
-    this.te = container.ta;
+    this.te = te;
     this.world = container.world;
 
     publicStr = EnderIO.lang.localize("gui.travelAccessable.public");
@@ -97,9 +95,7 @@ public class GuiTravelAccessable extends GuiContainerBaseEIO {
     AccessMode curMode = b.id == ID_PRIVATE ? AccessMode.PRIVATE : b.id == ID_PROTECTED ? AccessMode.PROTECTED : AccessMode.PUBLIC;
     te.setAccessMode(curMode);
 
-    BlockCoord bc = te.getLocation();
-    PacketAccessMode p = new PacketAccessMode(bc.x, bc.y, bc.z, curMode);
-    PacketHandler.INSTANCE.sendToServer(p);
+    GuiPacket.send(this, ContainerTravelAccessable.EXEC_ACCESS_MODE, curMode);
   }
 
   @Override
@@ -185,9 +181,7 @@ public class GuiTravelAccessable extends GuiContainerBaseEIO {
       return;
     }
     te.setLabel(newTxt);
-    BlockCoord bc = te.getLocation();
-    PacketLabel p = new PacketLabel(bc.x, bc.y, bc.z, te.getLabel());
-    PacketHandler.INSTANCE.sendToServer(p);
+    GuiPacket.send(this, ContainerTravelAccessable.EXEC_LABEL, newTxt);
   }
 
   @Override

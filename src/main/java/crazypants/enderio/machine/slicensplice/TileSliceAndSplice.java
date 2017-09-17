@@ -14,6 +14,7 @@ import crazypants.enderio.machine.recipe.IManyToOneRecipe;
 import crazypants.enderio.machine.recipe.ManyToOneMachineRecipe;
 import crazypants.enderio.machine.recipe.RecipeInput;
 import crazypants.enderio.paint.IPaintable;
+import crazypants.util.Prep;
 import info.loenwind.autosave.annotations.Storable;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.item.ItemAxe;
@@ -25,6 +26,7 @@ import net.minecraftforge.fml.common.FMLCommonHandler;
 import static crazypants.enderio.capacitor.CapacitorKey.SLICE_POWER_BUFFER;
 import static crazypants.enderio.capacitor.CapacitorKey.SLICE_POWER_INTAKE;
 import static crazypants.enderio.capacitor.CapacitorKey.SLICE_POWER_USE;
+import static crazypants.enderio.config.Config.slicenspliceToolDamageChance;
 
 @Storable
 public class TileSliceAndSplice extends AbstractPoweredTaskEntity implements IPaintable.IPaintableTileEntity {
@@ -49,7 +51,7 @@ public class TileSliceAndSplice extends AbstractPoweredTaskEntity implements IPa
 
   @Override
   protected IMachineRecipe canStartNextTask(float chance) {
-    if (getAxe() == null || getShears() == null) {
+    if (!hasTools()) {
       return null;
     }
     return super.canStartNextTask(chance);
@@ -64,17 +66,40 @@ public class TileSliceAndSplice extends AbstractPoweredTaskEntity implements IPa
   }
 
   @Override
+  protected boolean checkProgress(boolean redstoneChecksPassed) {
+    if (!hasTools()) {
+      return false;
+    }
+    return super.checkProgress(redstoneChecksPassed);
+  }
+
+  private boolean hasTools() {
+    return Prep.isValid(getAxe()) && Prep.isValid(getShears());
+  }
+
+  @Override
   protected void taskComplete() {
     super.taskComplete();
     damageTool(getAxe(), axeIndex);
     damageTool(getShears(), shearsIndex);
   }
 
+  @Override
+  protected double usePower() {
+    if (random.nextFloat() < slicenspliceToolDamageChance) {
+      damageTool(getAxe(), axeIndex);
+    }
+    if (random.nextFloat() < slicenspliceToolDamageChance) {
+      damageTool(getShears(), shearsIndex);
+    }
+    return super.usePower();
+  }
+
   private void damageTool(ItemStack tool, int toolIndex) {
-    if (tool != null && tool.isItemStackDamageable()) {
+    if (Prep.isValid(tool) && tool.isItemStackDamageable()) {
       tool.damageItem(1, getFakePlayer());
       if (tool.getItemDamage() >= tool.getMaxDamage()) {
-        inventory[toolIndex] = null;
+        inventory[toolIndex] = Prep.getEmpty();
       }
     }
   }
@@ -99,7 +124,7 @@ public class TileSliceAndSplice extends AbstractPoweredTaskEntity implements IPa
 
   @Override
   public boolean isMachineItemValidForSlot(int slot, ItemStack itemstack) {
-    if (itemstack == null || itemstack.getItem() == null) {
+    if (Prep.isInvalid(itemstack)) {
       return false;
     }
     if (!slotDefinition.isInputSlot(slot)) {
@@ -113,14 +138,14 @@ public class TileSliceAndSplice extends AbstractPoweredTaskEntity implements IPa
     }
 
     ItemStack currentStackInSlot = inventory[slot];
-    if (currentStackInSlot != null) {
+    if (Prep.isValid(currentStackInSlot)) {
       return currentStackInSlot.isItemEqual(itemstack);
     }
 
     int numSlotsFilled = 0;
     for (int i = slotDefinition.getMinInputSlot(); i <= slotDefinition.getMaxInputSlot(); i++) {
       if (i >= 0 && i < inventory.length && i != axeIndex && i != shearsIndex) {
-        if (inventory[i] != null && inventory[i].stackSize > 0) {
+        if (Prep.isValid(inventory[i]) && inventory[i].stackSize > 0) {
           numSlotsFilled++;
         }
       }
